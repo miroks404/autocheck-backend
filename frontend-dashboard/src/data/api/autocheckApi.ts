@@ -1,5 +1,5 @@
-import type { AiReview, Assignment, AuthUser, CheckResult, ReportStats, Submission, Verdict } from "../../domain/models"
-import { httpRequest } from "./httpClient"
+import type { AiReview, Assignment, AuthUser, CheckResult, ReportStats, Submission, TimelineEvent, Verdict } from "../../domain/models"
+import { httpRequest, httpRequestText } from "./httpClient"
 
 type ApiEnvelope<T> = {
   data: T
@@ -31,7 +31,14 @@ export const apiClient = {
   },
   createAssignment(
     token: string,
-    payload: { title: string; description: string; checker_weights: Record<string, number> },
+    payload: {
+      title: string
+      description: string
+      checker_weights: Record<string, number>
+      technologies?: string[]
+      candidate_instructions?: string
+      status?: "draft" | "published"
+    },
   ) {
     return httpRequest<ApiEnvelope<Assignment>>("POST", "/api/v1/assignments", token, payload)
   },
@@ -57,8 +64,21 @@ export const apiClient = {
   rerunSubmission(token: string, id: number) {
     return httpRequest<ApiEnvelope<Submission>>("POST", `/api/v1/submissions/${id}/rerun`, token)
   },
-  setVerdict(token: string, id: number, verdict: Verdict) {
-    return httpRequest<ApiEnvelope<Submission>>("PUT", `/api/v1/submissions/${id}/verdict`, token, { verdict })
+  setVerdict(token: string, id: number, verdict: Verdict, comment?: string | null) {
+    return httpRequest<ApiEnvelope<Submission>>("PUT", `/api/v1/submissions/${id}/verdict`, token, {
+      verdict,
+      comment: comment ?? null,
+    })
+  },
+  getTimeline(token: string, id: number) {
+    return httpRequest<ApiEnvelope<{ items: TimelineEvent[]; total: number }>>(
+      "GET",
+      `/api/v1/submissions/${id}/timeline`,
+      token,
+    )
+  },
+  getReportHtml(token: string, id: number) {
+    return httpRequestText("GET", `/api/v1/submissions/${id}/report?format=html`, token)
   },
   getReport(token: string, id: number) {
     return httpRequest<ApiEnvelope<Record<string, unknown>>>("GET", `/api/v1/submissions/${id}/report`, token)

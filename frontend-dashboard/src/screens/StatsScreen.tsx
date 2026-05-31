@@ -60,12 +60,12 @@ export function StatsScreen({ stats, submissions }: Props) {
             const y1 = 200 - (prev.count / maxCount) * 180 + 10
             const x2 = (index / (chartPoints.length - 1)) * 580 + 10
             const y2 = 200 - (point.count / maxCount) * 180 + 10
-            return <line key={point.key} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#4c7fff" strokeWidth="2" />
+            return <line key={point.key} x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--primary)" strokeWidth="2" />
           })}
           {chartPoints.map((point, index) => {
             const cx = (index / (chartPoints.length - 1)) * 580 + 10
             const cy = 200 - (point.count / maxCount) * 180 + 10
-            return <circle key={point.key} cx={cx} cy={cy} r="2.5" fill="#00e5a0" />
+            return <circle key={point.key} cx={cx} cy={cy} r="2.5" fill="var(--success)" />
           })}
         </svg>
       </article>

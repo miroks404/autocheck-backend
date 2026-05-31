@@ -1,73 +1,53 @@
-# React + TypeScript + Vite
+# AutoCheckMobile Web Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+SPA для роли **Эксперт/HR**: управление заданиями, просмотр проверок, вердикты и статистика.
 
-Currently, two official plugins are available:
+## Архитектура
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+src/
+  screens/          # Presentation — экраны
+  components/ui/    # Переиспользуемые UI-компоненты (дизайн-система)
+  state/            # State management (React Context + reducer)
+  domain/           # Use cases и доменные модели
+  data/api/         # API Client Layer (единственная точка HTTP)
+  shared/           # Утилиты (даты, лейблы)
+  core/             # Конфигурация
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Компоненты **не обращаются к сети напрямую** — только через `domain/useCases.ts` → `data/api/autocheckApi.ts`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Запуск
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cd frontend-dashboard
+npm install
+npm run dev
 ```
+
+Переменные окружения (`.env`):
+
+```
+VITE_API_BASE_URL=http://localhost:8000
+```
+
+## Реализованные экраны (Модуль Б)
+
+| Экран | Описание |
+|-------|----------|
+| Авторизация | JWT login/register, обработка 401/403/422/500 |
+| Загрузка задания | Assignment + Git/ZIP + ФИО/email кандидата |
+| Дашборд эксперта | DataTable, поиск, фильтры, чипы, сортировка |
+| Карточка проверки | ScoreCard, ResultRow, AI-анализ, вердикт, хронология |
+| Создание задания | Чекеры, ползунки весов (сумма 100%), черновик/публикация |
+| Статистика | Метрики, график 30 дней, топ кандидатов |
+
+## Дизайн-система
+
+Токены в `src/index.css` (`--primary`, `--success`, …). Демо смены токена — селектор в шапке.
+
+Компоненты: `Button`, `Input`, `Checkbox`, `StatusBadge`, `ProgressBar`, `ScoreCard`, `DataTable`, `FileUpload`, `ResultRow`, `FilterChip`.
+
+## Адаптивность
+
+Поддержка экранов **320–1920px**: flex/grid, `overflow-x: auto` для таблиц, breakpoints 1024/768/480px.

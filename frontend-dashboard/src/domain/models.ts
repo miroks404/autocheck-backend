@@ -11,7 +11,10 @@ export type Assignment = {
   id: number
   title: string
   description: string
+  technologies?: string[]
+  candidateInstructions?: string
   checkerWeights: Record<string, number>
+  status?: "draft" | "published"
   createdBy: number
   createdAt?: string | null
 }
@@ -24,10 +27,14 @@ export type Submission = {
   id: number
   assignmentId: number
   candidateId: number
+  candidateFullName?: string
+  candidateEmail?: string
+  assignmentTitle?: string
   sourceType: string
   status: SubmissionStatus
   finalScore: number | null
   verdict: Verdict
+  verdictComment?: string | null
   createdAt?: string | null
   updatedAt?: string | null
 }
@@ -38,6 +45,18 @@ export type CheckResult = {
   score: number
   message: string
   details?: Record<string, unknown> | null
+  createdAt?: string | null
+}
+
+export type TimelineEvent = {
+  event: string
+  label: string
+  timestamp?: string | null
+  status?: string
+  score?: number
+  verdict?: string
+  comment?: string | null
+  finalScore?: number | null
 }
 
 export type ReportStats = {

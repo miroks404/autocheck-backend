@@ -1,22 +1,24 @@
 import { useEffect, useState } from "react"
 import "./index.css"
-import { APP_NAME } from "./core/config"
+import { API_BASE_URL, APP_NAME } from "./core/config"
 import { ApiError } from "./data/api/httpClient"
 import {
   authorize,
   fetchAiReview,
   fetchAssignments,
   fetchProfile,
-  fetchReport,
+  fetchReportHtml,
   fetchStats,
   fetchSubmissionDetails,
+  fetchSubmissionStatus,
   fetchSubmissions,
+  fetchTimeline,
   publishAssignment,
   rerunSubmission,
   sendSubmission,
   setSubmissionVerdict,
 } from "./domain/useCases"
-import type { AiReview, Submission, Verdict } from "./domain/models"
+import type { AiReview, Submission, TimelineEvent, Verdict } from "./domain/models"
 import { AppProvider, useAppContext } from "./state/AppContext"
 import { AuthScreen } from "./screens/AuthScreen"
 import { UploadScreen } from "./screens/UploadScreen"
@@ -25,13 +27,24 @@ import { SubmissionDetailsScreen } from "./screens/SubmissionDetailsScreen"
 import { StatsScreen } from "./screens/StatsScreen"
 import { ToastStack } from "./components/ToastStack"
 import { AssignmentCreateScreen } from "./screens/AssignmentCreateScreen"
-import { apiClient } from "./data/api/autocheckApi"
+
+const TOKEN_PRESETS: Record<string, string> = {
+  default: "#4c7fff",
+  emerald: "#00e5a0",
+  amber: "#f59e0b",
+}
 
 function AppInner() {
   const { state, dispatch, addToast } = useAppContext()
   const [activeTab, setActiveTab] = useState<"upload" | "dashboard" | "details" | "stats">("upload")
   const [createAssignmentOpen, setCreateAssignmentOpen] = useState(false)
   const [aiReview, setAiReview] = useState<AiReview | null>(null)
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([])
+  const [tokenPreset, setTokenPreset] = useState("default")
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--primary", TOKEN_PRESETS[tokenPreset] ?? TOKEN_PRESETS.default)
+  }, [tokenPreset])
 
   const loadCollections = async (token: string) => {
     dispatch({ type: "SET_LOADING", payload: true })
@@ -47,6 +60,18 @@ function AppInner() {
     } finally {
       dispatch({ type: "SET_LOADING", payload: false })
     }
+  }
+
+  const refreshSubmissionInLists = async (token: string, submissionId: number) => {
+    const [details, events, submissions] = await Promise.all([
+      fetchSubmissionDetails(token, submissionId),
+      fetchTimeline(token, submissionId),
+      fetchSubmissions(token),
+    ])
+    dispatch({ type: "SET_SELECTED_SUBMISSION", payload: details.submission })
+    dispatch({ type: "SET_SELECTED_RESULTS", payload: details.results })
+    dispatch({ type: "SET_SUBMISSIONS", payload: submissions })
+    setTimeline(events)
   }
 
   const onAuthLogin = async (email: string, password: string) => {
@@ -70,13 +95,15 @@ function AppInner() {
       return
     }
     if (error.status === 403) addToast("error", "Недостаточно прав")
-    else if (error.status === 422) addToast("error", "Ошибка валидации данных")
-    else if (error.status >= 500) addToast("error", "Серверная ошибка")
     else addToast("error", error.message)
   }
 
   const trackSubmission = async (token: string, submissionId: number) => {
-    const streamUrl = `${new URL("/api/v1/submissions/" + submissionId + "/events", apiClientBase()).toString()}`
+    const streamUrl = `${API_BASE_URL}/api/v1/submissions/${submissionId}/events`
+    const applyStatus = async () => {
+      await refreshSubmissionInLists(token, submissionId)
+    }
+
     try {
       const response = await fetch(streamUrl, {
         headers: { Authorization: `Bearer ${token}`, Accept: "text/event-stream" },
@@ -90,19 +117,32 @@ function AppInner() {
         const result = await reader.read()
         done = result.done
         if (!result.value) continue
+        await applyStatus()
         const text = decoder.decode(result.value, { stream: true })
-        if (text.includes("error")) addToast("error", "Проверка завершилась с ошибкой")
+        if (text.includes("done")) break
+        if (text.includes("error")) {
+          addToast("error", "Проверка завершилась с ошибкой")
+          break
+        }
       }
+      await applyStatus()
     } catch {
       for (let i = 0; i < 75; i += 1) {
         await new Promise((resolve) => window.setTimeout(resolve, 2000))
-        const status = await apiClient.getSubmissionStatus(token, submissionId)
-        if (status.data.status === "done" || status.data.status === "error") break
+        const statusPayload = await fetchSubmissionStatus(token, submissionId)
+        await applyStatus()
+        if (statusPayload.status === "done" || statusPayload.status === "error") break
       }
     }
   }
 
-  const onSubmitUpload = async (payload: { assignmentId: number; gitUrl?: string; zipFile?: File }) => {
+  const onSubmitUpload = async (payload: {
+    assignmentId: number
+    gitUrl?: string
+    zipFile?: File
+    candidateFullName: string
+    candidateEmail: string
+  }) => {
     if (!state.token) return
     try {
       dispatch({ type: "SET_LOADING", payload: true })
@@ -111,6 +151,7 @@ function AppInner() {
       const details = await fetchSubmissionDetails(state.token, submission.id)
       dispatch({ type: "SET_SELECTED_SUBMISSION", payload: details.submission })
       dispatch({ type: "SET_SELECTED_RESULTS", payload: details.results })
+      setTimeline(await fetchTimeline(state.token, submission.id))
       await loadCollections(state.token)
       setActiveTab("details")
       addToast("success", "Решение отправлено на проверку")
@@ -127,6 +168,7 @@ function AppInner() {
       const details = await fetchSubmissionDetails(state.token, submission.id)
       dispatch({ type: "SET_SELECTED_SUBMISSION", payload: details.submission })
       dispatch({ type: "SET_SELECTED_RESULTS", payload: details.results })
+      setTimeline(await fetchTimeline(state.token, submission.id))
       setAiReview(null)
       setActiveTab("details")
     } catch (error) {
@@ -147,12 +189,12 @@ function AppInner() {
   const onDownloadReport = async () => {
     if (!state.token || !state.selectedSubmission) return
     try {
-      const report = await fetchReport(state.token, state.selectedSubmission.id)
-      const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" })
+      const html = await fetchReportHtml(state.token, state.selectedSubmission.id)
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `submission-${state.selectedSubmission.id}-report.json`
+      a.download = `submission-${state.selectedSubmission.id}-report.html`
       a.click()
       URL.revokeObjectURL(url)
       addToast("success", "Отчёт скачан")
@@ -161,11 +203,12 @@ function AppInner() {
     }
   }
 
-  const onSetVerdict = async (verdict: Verdict) => {
+  const onSetVerdict = async (verdict: Verdict, comment: string) => {
     if (!state.token || !state.selectedSubmission) return
     try {
-      const updated = await setSubmissionVerdict(state.token, state.selectedSubmission.id, verdict)
+      const updated = await setSubmissionVerdict(state.token, state.selectedSubmission.id, verdict, comment)
       dispatch({ type: "SET_SELECTED_SUBMISSION", payload: updated })
+      setTimeline(await fetchTimeline(state.token, updated.id))
       await loadCollections(state.token)
       addToast("success", "Вердикт сохранён")
     } catch (error) {
@@ -173,12 +216,19 @@ function AppInner() {
     }
   }
 
-  const onPublishAssignment = async (payload: { title: string; description: string; checker_weights: Record<string, number> }) => {
+  const onPublishAssignment = async (payload: {
+    title: string
+    description: string
+    technologies: string[]
+    candidate_instructions: string
+    checker_weights: Record<string, number>
+    status: "draft" | "published"
+  }) => {
     if (!state.token) return
     try {
       await publishAssignment(state.token, payload)
       await loadCollections(state.token)
-      addToast("success", "Задание создано")
+      addToast("success", payload.status === "draft" ? "Черновик сохранён" : "Задание опубликовано")
     } catch (error) {
       handleApiError(error)
     }
@@ -192,6 +242,7 @@ function AppInner() {
       const details = await fetchSubmissionDetails(state.token, state.selectedSubmission.id)
       dispatch({ type: "SET_SELECTED_SUBMISSION", payload: details.submission })
       dispatch({ type: "SET_SELECTED_RESULTS", payload: details.results })
+      setTimeline(await fetchTimeline(state.token, state.selectedSubmission.id))
       await loadCollections(state.token)
       addToast("success", "Проверка перезапущена")
     } catch (error) {
@@ -217,21 +268,29 @@ function AppInner() {
   return (
     <main className="app">
       <header className="topbar">
-        <h1>{APP_NAME}</h1>
+        <h1 className="text-h1">{APP_NAME}</h1>
         <nav className="tabs">
-          <button onClick={() => setActiveTab("upload")} className={activeTab === "upload" ? "tab-active" : ""}>
+          <button type="button" onClick={() => setActiveTab("upload")} className={activeTab === "upload" ? "tab-active" : ""}>
             Загрузка
           </button>
-          <button onClick={() => setActiveTab("dashboard")} className={activeTab === "dashboard" ? "tab-active" : ""}>
+          <button type="button" onClick={() => setActiveTab("dashboard")} className={activeTab === "dashboard" ? "tab-active" : ""}>
             Дашборд
           </button>
-          <button onClick={() => setActiveTab("details")} className={activeTab === "details" ? "tab-active" : ""}>
+          <button type="button" onClick={() => setActiveTab("details")} className={activeTab === "details" ? "tab-active" : ""}>
             Карточка
           </button>
-          <button onClick={() => setActiveTab("stats")} className={activeTab === "stats" ? "tab-active" : ""}>
+          <button type="button" onClick={() => setActiveTab("stats")} className={activeTab === "stats" ? "tab-active" : ""}>
             Статистика
           </button>
         </nav>
+        <label className="token-demo">
+          <span className="text-caption">Демо токена primary</span>
+          <select value={tokenPreset} onChange={(e) => setTokenPreset(e.target.value)}>
+            <option value="default">Синий</option>
+            <option value="emerald">Изумрудный</option>
+            <option value="amber">Янтарный</option>
+          </select>
+        </label>
       </header>
 
       {!state.token || !state.user ? (
@@ -239,7 +298,12 @@ function AppInner() {
       ) : (
         <>
           {activeTab === "upload" ? (
-            <UploadScreen assignments={state.assignments} onSubmit={onSubmitUpload} />
+            <UploadScreen
+              assignments={state.assignments}
+              currentUserEmail={state.user.email}
+              currentUserRole={state.user.role}
+              onSubmit={onSubmitUpload}
+            />
           ) : null}
           {activeTab === "dashboard" ? (
             <DashboardScreen
@@ -255,6 +319,7 @@ function AppInner() {
               submission={state.selectedSubmission}
               assignment={state.assignments.find((a) => a.id === state.selectedSubmission?.assignmentId) ?? null}
               results={state.selectedResults}
+              timeline={timeline}
               aiReview={aiReview}
               onLoadAiReview={onLoadAiReview}
               onDownloadReport={onDownloadReport}
@@ -263,7 +328,13 @@ function AppInner() {
             />
           ) : null}
           {activeTab === "stats" ? <StatsScreen stats={state.stats} submissions={state.submissions} /> : null}
-          <div className="floating-actions">{state.selectedSubmission ? <button onClick={onRerun}>Перезапустить текущую проверку</button> : null}</div>
+          <div className="floating-actions">
+            {state.selectedSubmission ? (
+              <button type="button" onClick={onRerun}>
+                Перезапустить текущую проверку
+              </button>
+            ) : null}
+          </div>
         </>
       )}
 
@@ -276,10 +347,6 @@ function AppInner() {
       <ToastStack />
     </main>
   )
-}
-
-function apiClientBase() {
-  return import.meta.env.VITE_API_BASE_URL || "http://192.168.1.137:8000"
 }
 
 export default function App() {

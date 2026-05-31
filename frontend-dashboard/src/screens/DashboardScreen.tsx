@@ -1,7 +1,13 @@
+/**
+ * DashboardScreen — рабочее пространство эксперта: таблица проверок, поиск и фильтры.
+ * Дата создания: 31-05-2026. Автор: Team 4.
+ */
 import { useMemo, useState } from "react"
 import { DataTable } from "../components/ui/DataTable"
 import { StatusBadge } from "../components/ui/StatusBadge"
+import { FilterChip } from "../components/ui/FilterChip"
 import { formatUtcToMsk } from "../shared/date"
+import { STATUS_LABELS } from "../shared/labels"
 import type { Assignment, Submission } from "../domain/models"
 import { Button } from "../components/ui/Button"
 
@@ -29,7 +35,7 @@ export function DashboardScreen({
 
   const filtered = useMemo(() => {
     return submissions.filter((item) => {
-      const textTarget = `${item.id} ${item.assignmentId} ${item.candidateId}`.toLowerCase()
+      const textTarget = `${item.candidateFullName ?? ""} ${item.candidateEmail ?? ""} ${item.id}`.toLowerCase()
       const matchesQuery = !query.trim() || textTarget.includes(query.trim().toLowerCase())
       const matchesAssignment = !assignmentFilter || item.assignmentId === assignmentFilter
       const matchesStatus = statusFilters.length === 0 || statusFilters.includes(item.status)
@@ -44,7 +50,10 @@ export function DashboardScreen({
     })
   }, [submissions, query, assignmentFilter, statusFilters, dateFrom, dateTo])
 
-  const assignmentTitle = (id: number) => assignments.find((a) => a.id === id)?.title ?? `Assignment #${id}`
+  const assignmentTitle = (id: number) =>
+    submissions.find((s) => s.assignmentId === id)?.assignmentTitle ??
+    assignments.find((a) => a.id === id)?.title ??
+    `Задание #${id}`
 
   const toggleStatus = (status: Submission["status"]) => {
     setStatusFilters((prev) => (prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]))
@@ -60,6 +69,25 @@ export function DashboardScreen({
     setPage(1)
   }
 
+  const activeChips: Array<{ key: string; label: string; onRemove: () => void }> = []
+  if (query.trim()) activeChips.push({ key: "query", label: `Поиск: ${query.trim()}`, onRemove: () => setQuery("") })
+  if (assignmentFilter) {
+    activeChips.push({
+      key: "assignment",
+      label: `Задание: ${assignmentTitle(assignmentFilter)}`,
+      onRemove: () => setAssignmentFilter(""),
+    })
+  }
+  statusFilters.forEach((status) =>
+    activeChips.push({
+      key: `status-${status}`,
+      label: `Статус: ${STATUS_LABELS[status]}`,
+      onRemove: () => setStatusFilters((prev) => prev.filter((s) => s !== status)),
+    }),
+  )
+  if (dateFrom) activeChips.push({ key: "from", label: `С: ${dateFrom}`, onRemove: () => setDateFrom("") })
+  if (dateTo) activeChips.push({ key: "to", label: `По: ${dateTo}`, onRemove: () => setDateTo("") })
+
   return (
     <section className="panel">
       <header className="panel-header">
@@ -70,7 +98,7 @@ export function DashboardScreen({
       <div className="toolbar">
         <input
           className="field-input"
-          placeholder="Поиск по id / candidate / assignment"
+          placeholder="Поиск по ФИО кандидата"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value)
@@ -100,10 +128,11 @@ export function DashboardScreen({
         {(["pending", "running", "done", "error"] as Array<Submission["status"]>).map((status) => (
           <button
             key={status}
+            type="button"
             className={`chip ${statusFilters.includes(status) ? "chip-active" : ""}`}
             onClick={() => toggleStatus(status)}
           >
-            {status}
+            {STATUS_LABELS[status]}
           </button>
         ))}
         <Button variant="secondary" onClick={clearFilters}>
@@ -114,6 +143,14 @@ export function DashboardScreen({
         ) : null}
       </div>
 
+      {activeChips.length > 0 ? (
+        <div className="chip-row">
+          {activeChips.map((chip) => (
+            <FilterChip key={chip.key} label={chip.label} onRemove={chip.onRemove} />
+          ))}
+        </div>
+      ) : null}
+
       <DataTable
         rows={filtered}
         page={page}
@@ -123,26 +160,36 @@ export function DashboardScreen({
           {
             key: "candidate",
             title: "Кандидат",
-            render: (row) => `#${row.candidateId}`,
+            sortable: true,
+            sortValue: (row) => row.candidateFullName ?? `#${row.candidateId}`,
+            render: (row) => row.candidateFullName ?? `#${row.candidateId}`,
           },
           {
             key: "assignment",
             title: "Задание",
+            sortable: true,
+            sortValue: (row) => assignmentTitle(row.assignmentId),
             render: (row) => assignmentTitle(row.assignmentId),
           },
           {
             key: "date",
             title: "Дата загрузки",
+            sortable: true,
+            sortValue: (row) => row.createdAt ?? "",
             render: (row) => formatUtcToMsk(row.createdAt),
           },
           {
             key: "status",
             title: "Статус",
+            sortable: true,
+            sortValue: (row) => row.status,
             render: (row) => <StatusBadge status={row.status} />,
           },
           {
             key: "score",
             title: "Итоговый балл",
+            sortable: true,
+            sortValue: (row) => row.finalScore ?? -1,
             render: (row) => (row.finalScore === null ? "—" : row.finalScore),
           },
         ]}
