@@ -93,6 +93,8 @@ docker compose exec api alembic upgrade head
   - `git clone` для `git_url`
   - распаковка ZIP для `zip_file`
 - Каждый чекер запускается отдельно с таймаутом 3 минуты (изолированный Docker контейнер при доступном Docker socket).
+- Worker монтирует `/var/run/docker.sock` и использует named volume `autocheck_submission_storage` для workspace кандидата.
+- В Docker-образе установлен `docker-cli` (клиент), без него чекеры вернут `docker isolation is required but unavailable`.
 - Ошибка одного чекера не останавливает остальные.
 - Результаты каждого чекера сохраняются сразу, итоговый балл считается по весам `ResultCalculator`.
 

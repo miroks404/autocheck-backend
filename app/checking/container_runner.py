@@ -2,9 +2,28 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from app.core.config import get_settings
+
 
 def _docker_command_available() -> str | None:
     return shutil.which("docker")
+
+
+def docker_workspace_mount_args(workspace_path: str) -> list[str]:
+    """Build docker volume/workdir args for checker workspace paths."""
+    settings = get_settings()
+    workspace = Path(workspace_path).resolve()
+    storage_root = Path(settings.checker_storage_mount).resolve()
+    try:
+        relative = workspace.relative_to(storage_root)
+    except ValueError:
+        return ["-v", f"{workspace}:{workspace}", "-w", str(workspace)]
+    return [
+        "-v",
+        f"{settings.checker_storage_volume}:/storage",
+        "-w",
+        f"/storage/{relative.as_posix()}",
+    ]
 
 
 def run_in_isolated_container(
@@ -27,8 +46,7 @@ def run_in_isolated_container(
         }
     cmd = [docker_bin, "run", "--rm", "--network=none"]
     if workspace_path:
-        workspace = Path(workspace_path).resolve()
-        cmd += ["-v", f"{workspace}:/workspace", "-w", "/workspace"]
+        cmd += docker_workspace_mount_args(workspace_path)
     cmd += [image, "sh", "-lc", command]
     try:
         proc = subprocess.run(

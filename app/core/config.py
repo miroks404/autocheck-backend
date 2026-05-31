@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     ai_base_url: str = Field(default="https://api.openai.com", alias="AI_BASE_URL")
     ai_model: str = Field(default="gpt-4o-mini", alias="AI_MODEL")
 
+    checker_storage_volume: str = Field(default="autocheck_submission_storage", alias="CHECKER_STORAGE_VOLUME")
+    checker_storage_mount: str = Field(default="/app/storage", alias="CHECKER_STORAGE_MOUNT")
+
     cors_origins_raw: str = Field(default="http://localhost:3000,http://localhost:5173", alias="CORS_ORIGINS")
     cors_allow_origin_regex: str = Field(
         default=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$",

@@ -219,7 +219,7 @@ class SqlAlchemyCandidateRepository:
         existing = self.db.query(User).filter(User.email == email).first()
         if existing:
             if existing.role != UserRole.candidate:
-                raise ValueError("Email belongs to a non-candidate user")
+                raise ValueError("Email принадлежит эксперту или администратору, укажите email кандидата")
             if existing.full_name != full_name:
                 existing.full_name = full_name
                 self.db.commit()

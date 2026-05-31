@@ -29,6 +29,7 @@ services:
       - redis
     volumes:
       - ./:/app
+      - submission_storage:/app/storage
 
   worker:
     build: .
@@ -41,6 +42,7 @@ services:
       - redis
     volumes:
       - ./:/app
+      - submission_storage:/app/storage
       - /var/run/docker.sock:/var/run/docker.sock
 
   database:
@@ -70,3 +72,5 @@ volumes:
   db_data:
   redis_data:
   ollama_data:
+  submission_storage:
+    name: autocheck_submission_storage
