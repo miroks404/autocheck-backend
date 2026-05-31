@@ -1,4 +1,14 @@
 services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: autocheck-ollama
+    profiles: ["ai-local"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
   android-checker-image:
     build:
       context: ./docker/checkers/android
@@ -59,3 +69,4 @@ services:
 volumes:
   db_data:
   redis_data:
+  ollama_data:
