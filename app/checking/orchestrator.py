@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from app.checking.calculator import ResultCalculator
 from app.checking.interfaces import CheckResultDTO, IChecker
 from app.models import Submission
@@ -17,19 +19,27 @@ class CheckOrchestrator:
     def run_all(self, submission: Submission, workspace_path: str, on_result=None) -> tuple[list[CheckResultDTO], int]:
         """Run all checkers, optionally invoking callback after each result."""
         results: list[CheckResultDTO] = []
-        for checker in self.checkers:
+        if not self.checkers:
+            return [], 0
+
+        def _safe_run(checker: IChecker) -> CheckResultDTO:
             try:
-                item = checker.run(submission, workspace_path)
+                return checker.run(submission, workspace_path)
             except Exception as exc:  # pragma: no cover - runtime guard
-                item = CheckResultDTO(
+                return CheckResultDTO(
                     checker=getattr(checker, "name", "unknown"),
                     status="error",
                     score=0,
                     message="Checker failed",
                     details={"error": str(exc)},
                 )
-            results.append(item)
-            if on_result is not None:
-                on_result(item)
+
+        with ThreadPoolExecutor(max_workers=len(self.checkers)) as executor:
+            futures = [executor.submit(_safe_run, checker) for checker in self.checkers]
+            for future in as_completed(futures):
+                item = future.result()
+                results.append(item)
+                if on_result is not None:
+                    on_result(item)
         total = ResultCalculator.total_score(results, self.weights)
         return results, total

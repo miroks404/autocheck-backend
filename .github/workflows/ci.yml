@@ -5,10 +5,39 @@ on:
     branches:
       - "**"
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: autocheck
+          POSTGRES_USER: autocheck
+          POSTGRES_PASSWORD: autocheck
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U autocheck -d autocheck"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      APP_NAME: AutoCheckMobile Backend
+      APP_URL: http://localhost:8000
+      ENVIRONMENT: ci
+      JWT_SECRET: ci-secret
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 120
+      DATABASE_URL: postgresql+psycopg2://autocheck:autocheck@localhost:5432/autocheck
+      REDIS_URL: redis://localhost:6379/0
+      AI_API_KEY: ""
+      AI_BASE_URL: https://api.openai.com
+      AI_MODEL: gpt-4o-mini
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5173
+      CORS_ALLOW_ORIGIN_REGEX: ^https?://(localhost|127\\.0\\.0\\.1)(:\\d+)?$
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,6 +54,9 @@ jobs:
 
       - name: Compile check
         run: python -m compileall app alembic
+
+      - name: Run migrations
+        run: alembic upgrade head
 
       - name: Run tests
         run: pytest -q

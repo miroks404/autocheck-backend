@@ -18,6 +18,26 @@ from app.worker.celery_app import celery_app
 logger = get_logger("CheckOrchestrator")
 
 
+def _build_active_checkers(weights: dict | None):
+    registry = {
+        "static_analysis": StaticAnalysisChecker,
+        "architecture": ArchitectureChecker,
+        "build": BuildChecker,
+        "tests": TestChecker,
+        "documentation": DocumentationChecker,
+        "git_practices": GitPracticesChecker,
+    }
+    default_order = list(registry.keys())
+    configured = weights or {}
+    if configured:
+        names = [name for name in default_order if float(configured.get(name, 0)) > 0]
+        if not names:
+            names = default_order
+    else:
+        names = default_order
+    return [registry[name]() for name in names]
+
+
 @celery_app.task(name="run_submission_checks")
 def run_submission_checks(submission_id: int):
     db: Session = SessionLocal()
@@ -47,14 +67,12 @@ def run_submission_checks(submission_id: int):
             submission.status = SubmissionStatus.error
             db.commit()
             return
-        checkers = [
-            StaticAnalysisChecker(),
-            ArchitectureChecker(),
-            BuildChecker(),
-            TestChecker(),
-            DocumentationChecker(),
-            GitPracticesChecker(),
-        ]
+        checkers = _build_active_checkers(assignment.checker_weights if assignment else None)
+        logger.info(
+            "Чекеры выбраны — submissionId=%s active=%s",
+            submission.id,
+            ",".join(checker.name for checker in checkers),
+        )
         db.query(CheckResult).filter(CheckResult.submission_id == submission.id).delete()
         db.commit()
 

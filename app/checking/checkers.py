@@ -1,4 +1,5 @@
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from app.checking.container_runner import run_checker_command
@@ -230,12 +231,15 @@ class TestChecker:
                 message="Превышено время выполнения",
                 details={"total": 0, "passed": 0, "output": result["output"], "isolated": result["isolated"]},
             )
-        passed = len(re.findall(r"\bPASS(?:ED)?\b", result["output"], re.IGNORECASE))
-        failed = len(re.findall(r"\bFAIL(?:ED)?\b", result["output"], re.IGNORECASE))
-        total = passed + failed
+        total, passed = self._parse_junit_summary(workspace_path)
+        junit_detected = total > 0
         if total == 0:
-            # fallback heuristic for tool outputs without explicit PASS/FAIL markers
-            total = 1 if result["ok"] else 1
+            passed = len(re.findall(r"\bPASS(?:ED)?\b", result["output"], re.IGNORECASE))
+            failed = len(re.findall(r"\bFAIL(?:ED)?\b", result["output"], re.IGNORECASE))
+            total = passed + failed
+        if total == 0:
+            # fallback heuristic for tool outputs without explicit markers
+            total = 1
             passed = 1 if result["ok"] else 0
         score = int((passed / total) * 100) if total else 0
         return CheckResultDTO(
@@ -243,7 +247,13 @@ class TestChecker:
             status="passed" if result["ok"] else "failed",
             score=score,
             message="Test run completed",
-            details={"total": total, "passed": passed, "output": result["output"][:4000], "isolated": result["isolated"]},
+            details={
+                "total": total,
+                "passed": passed,
+                "junit_detected": junit_detected,
+                "output": result["output"][:4000],
+                "isolated": result["isolated"],
+            },
         )
 
     @staticmethod
@@ -258,6 +268,39 @@ class TestChecker:
         if list(root.glob("*.xcodeproj")):
             return "xcodebuild test -scheme App -destination 'platform=iOS Simulator,name=iPhone 15'"
         return None
+
+    @staticmethod
+    def _parse_junit_summary(workspace_path: str) -> tuple[int, int]:
+        root = Path(workspace_path)
+        total = 0
+        failed = 0
+        for report in root.rglob("*.xml"):
+            parts = {part.lower() for part in report.parts}
+            if "test-results" not in parts and "surefire-reports" not in parts and "junit" not in report.name.lower():
+                continue
+            try:
+                xml_root = ET.fromstring(report.read_text(encoding="utf-8", errors="ignore"))
+            except Exception:
+                continue
+
+            suites = [xml_root]
+            if xml_root.tag == "testsuite":
+                suites = [xml_root]
+            elif xml_root.tag == "testsuites":
+                suites = [node for node in xml_root if node.tag == "testsuite"]
+
+            for suite in suites:
+                tests = int(suite.attrib.get("tests", 0))
+                failures = int(suite.attrib.get("failures", 0))
+                errors = int(suite.attrib.get("errors", 0))
+                skipped = int(suite.attrib.get("skipped", 0))
+                total += tests
+                failed += failures + errors + skipped
+
+        if total <= 0:
+            return 0, 0
+        passed = max(0, total - failed)
+        return total, passed
 
 
 class DocumentationChecker:
@@ -366,11 +409,22 @@ class GitPracticesChecker:
             timeout_sec=60,
             image=_runtime_image(workspace_path),
         )
+        review_result = run_checker_command(
+            "git log --pretty=format:'%s' -n 200",
+            workspace_path=workspace_path,
+            timeout_sec=60,
+            image=_runtime_image(workspace_path),
+        )
         messages = [m.strip().lower() for m in log_result["output"].splitlines() if m.strip()]
         meaningful = [m for m in messages if m not in {"fix", "update"} and len(m.split()) >= 2]
         meaningful_pct = int(round((len(meaningful) / len(messages)) * 100)) if messages else 0
         feature_branches = len([b for b in branch_result["output"].splitlines() if "main" not in b and "master" not in b])
-        score = min(100, int(meaningful_pct * 0.7 + min(feature_branches, 10) * 3))
+        review_markers = ("merge pull request", "pull request", "merge request", " mr ", "merge branch")
+        review_evidence = 0
+        for line in review_result["output"].lower().splitlines():
+            if any(marker in line for marker in review_markers):
+                review_evidence += 1
+        score = min(100, int(meaningful_pct * 0.6 + min(feature_branches, 10) * 2 + min(review_evidence, 10) * 2))
         return CheckResultDTO(
             checker=self.name,
             status="passed" if score >= 50 else "failed",
@@ -379,6 +433,7 @@ class GitPracticesChecker:
             details={
                 "meaningful_commits_pct": meaningful_pct,
                 "feature_branches": feature_branches,
+                "review_evidence": review_evidence,
                 "output_excerpt": (log_result["output"][:1200] if log_result["output"] else ""),
             },
         )
