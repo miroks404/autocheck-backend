@@ -54,7 +54,9 @@ class AICodeReviewer:
         self.provider = provider
 
     def review(self, submission_context: dict) -> dict:
-        if not settings.ai_api_key:
+        base_url = settings.ai_base_url.lower()
+        using_ollama = "11434" in base_url or "ollama" in base_url
+        if not settings.ai_api_key and not using_ollama:
             return unavailable_payload("AI_API_KEY не задан")
 
         workspace = submission_workspace(submission_context["submission_id"])

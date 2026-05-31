@@ -136,6 +136,38 @@ docker compose exec api alembic upgrade head
 docker compose --profile checker-images build android-checker-image
 ```
 
+## Ollama (бесплатный AI локально)
+
+Можно запустить AI-анализ полностью локально без внешних платных API.
+
+1. Поднять Ollama контейнер:
+
+```bash
+docker compose --profile ai-local up -d ollama
+```
+
+2. Загрузить модель (пример):
+
+```bash
+docker exec -it autocheck-ollama ollama pull qwen2.5-coder:7b
+```
+
+3. В `.env` выставить:
+
+```env
+AI_API_KEY=ollama
+AI_BASE_URL=http://ollama:11434/v1
+AI_MODEL=qwen2.5-coder:7b
+```
+
+4. Пересоздать `api` и `worker`, чтобы применить env:
+
+```bash
+docker compose up -d --force-recreate api worker
+```
+
+После этого endpoint `GET /api/v1/submissions/{id}/ai-review` будет использовать локальный Ollama.
+
 ## Production / HTTPS
 
 Для прод-развёртывания добавлен `docker-compose.prod.yml` (Traefik + Let's Encrypt TLS).
