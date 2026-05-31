@@ -3,16 +3,19 @@ from sqlalchemy.orm import Session
 
 from app.application.use_cases.candidate_use_cases import CandidateUseCases
 from app.core.database import get_db
+from app.core.logging import get_logger
 from app.core.response import ok
 from app.deps import require_expert
 from app.infrastructure.repositories import SqlAlchemyCandidateRepository
 from app.models import User
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
+logger = get_logger("CandidateController")
 
 
 @router.get("", summary="Список кандидатов")
 def list_candidates(db: Session = Depends(get_db), user: User = Depends(require_expert)):
+    logger.info("Список кандидатов запрошен — expertId=%s", user.id)
     use_case = CandidateUseCases(SqlAlchemyCandidateRepository(db))
     data = use_case.list()
     return ok(data, meta={"total": data.get("total", 0)})
@@ -20,5 +23,6 @@ def list_candidates(db: Session = Depends(get_db), user: User = Depends(require_
 
 @router.get("/{candidate_id}", summary="Кандидат по ID")
 def get_candidate(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(require_expert)):
+    logger.info("Карточка кандидата запрошена — expertId=%s candidateId=%s", user.id, candidate_id)
     use_case = CandidateUseCases(SqlAlchemyCandidateRepository(db))
     return ok(use_case.get(candidate_id))

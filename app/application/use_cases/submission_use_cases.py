@@ -45,16 +45,16 @@ class SubmissionUseCases:
         items = [self._serialize_submission(item) for item in rows]
         return {"items": items, "total": len(items)}
 
-    def get(self, submission_id: int) -> dict:
-        row = self._get_or_404(submission_id)
+    def get(self, submission_id: int, user: User) -> dict:
+        row = self._get_or_404(submission_id, user)
         return self._serialize_submission(row)
 
-    def status(self, submission_id: int) -> dict:
-        row = self._get_or_404(submission_id)
+    def status(self, submission_id: int, user: User) -> dict:
+        row = self._get_or_404(submission_id, user)
         return {"submissionId": row.id, "status": row.status.value, "updatedAt": row.updated_at.isoformat()}
 
-    def results(self, submission_id: int) -> dict:
-        self._get_or_404(submission_id)
+    def results(self, submission_id: int, user: User) -> dict:
+        self._get_or_404(submission_id, user)
         rows = self.repo.list_results(submission_id)
         items = [
             {
@@ -81,8 +81,8 @@ class SubmissionUseCases:
         saved = self.repo.save(row)
         return self._serialize_submission(saved)
 
-    def report(self, submission_id: int) -> dict:
-        row = self._get_or_404(submission_id)
+    def report(self, submission_id: int, user: User) -> dict:
+        row = self._get_or_404(submission_id, user)
         results = self.repo.list_results(submission_id)
         return {
             "submissionId": row.id,
@@ -92,8 +92,8 @@ class SubmissionUseCases:
             "results": [{"checker": r.checker, "status": r.status, "score": r.score, "message": r.message} for r in results],
         }
 
-    def ai_review(self, submission_id: int) -> dict:
-        row = self._get_or_404(submission_id)
+    def ai_review(self, submission_id: int, user: User) -> dict:
+        row = self._get_or_404(submission_id, user)
         if row.ai_review:
             return row.ai_review
         assignment_requirements = self.repo.get_assignment_requirements(row.assignment_id)
@@ -112,11 +112,21 @@ class SubmissionUseCases:
         self.repo.save(row)
         return payload
 
-    def _get_or_404(self, submission_id: int):
+    def _get_or_404(self, submission_id: int, user: User | None = None):
         row = self.repo.get(submission_id)
         if not row:
             raise not_found("Submission")
+        if user is not None:
+            self._ensure_can_access(row, user)
         return row
+
+    @staticmethod
+    def _ensure_can_access(submission, user: User) -> None:
+        role = getattr(user.role, "value", user.role)
+        if role in {"expert", "admin"}:
+            return
+        if submission.candidate_id != user.id:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     @staticmethod
     def _serialize_submission(item) -> dict:

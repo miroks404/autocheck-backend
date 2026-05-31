@@ -19,6 +19,8 @@ class AuthUseCases:
         self.repo = repo
 
     def register(self, payload: RegisterIn) -> dict:
+        if payload.role != "candidate":
+            raise HTTPException(status_code=403, detail="Self-registration is allowed for candidates only")
         exists = self.repo.get_by_email(payload.email)
         if exists:
             raise HTTPException(status_code=422, detail="Email already registered")

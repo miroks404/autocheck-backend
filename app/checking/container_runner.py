@@ -93,6 +93,13 @@ def run_checker_command(
     image: str = "python:3.12-alpine",
 ) -> dict:
     result = run_in_isolated_container(command=command, workspace_path=workspace_path, timeout_sec=timeout_sec, image=image)
-    if result["isolated"]:
-        return result
-    return run_local_command(command=command, workspace_path=workspace_path, timeout_sec=timeout_sec)
+    # Requirement: candidate code must not run in the main application container.
+    if not result["isolated"]:
+        return {
+            "ok": False,
+            "timed_out": False,
+            "isolated": False,
+            "return_code": 127,
+            "output": "docker isolation is required but unavailable",
+        }
+    return result

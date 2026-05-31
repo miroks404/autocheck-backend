@@ -63,19 +63,19 @@ def list_submissions(db: Session = Depends(get_db), user: User = Depends(get_cur
 @router.get("/{submission_id}", summary="Проверка по ID")
 def get_submission(submission_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     use_case = SubmissionUseCases(SqlAlchemySubmissionRepository(db))
-    return ok(use_case.get(submission_id))
+    return ok(use_case.get(submission_id, user))
 
 
 @router.get("/{submission_id}/status", summary="Текущий статус проверки")
 def get_status(submission_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     use_case = SubmissionUseCases(SqlAlchemySubmissionRepository(db))
-    return ok(use_case.status(submission_id))
+    return ok(use_case.status(submission_id, user))
 
 
 @router.get("/{submission_id}/results", summary="Детальные результаты чекеров")
 def get_results(submission_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     use_case = SubmissionUseCases(SqlAlchemySubmissionRepository(db))
-    return ok(use_case.results(submission_id))
+    return ok(use_case.results(submission_id, user))
 
 
 @router.post("/{submission_id}/rerun", summary="Повторный запуск проверки")
@@ -100,20 +100,20 @@ def update_verdict(
 @router.get("/{submission_id}/report", summary="Скачать отчёт по проверке")
 def download_report(submission_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     use_case = SubmissionUseCases(SqlAlchemySubmissionRepository(db))
-    return ok(use_case.report(submission_id))
+    return ok(use_case.report(submission_id, user))
 
 
 @router.get("/{submission_id}/ai-review", summary="AI-анализ решения")
 def ai_review(submission_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     use_case = SubmissionUseCases(SqlAlchemySubmissionRepository(db))
-    return ok(use_case.ai_review(submission_id))
+    return ok(use_case.ai_review(submission_id, user))
 
 
 @router.get("/{submission_id}/events", summary="SSE-поток статусов проверки")
 async def submission_events(submission_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     repo = SqlAlchemySubmissionRepository(db)
     use_case = SubmissionUseCases(repo)
-    use_case.status(submission_id)
+    use_case.status(submission_id, user)
 
     async def event_stream():
         for _ in range(60):
