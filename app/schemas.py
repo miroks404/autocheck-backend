@@ -37,7 +37,10 @@ class AssignmentCreate(BaseModel):
 
     title: str
     description: str
+    technologies: list[str] = Field(default_factory=list)
+    candidate_instructions: str = ""
     checker_weights: dict[str, float] = Field(default_factory=dict)
+    status: Literal["draft", "published"] = "published"
 
 
 class AssignmentUpdate(BaseModel):
@@ -49,7 +52,10 @@ class AssignmentUpdate(BaseModel):
 
     title: str | None = None
     description: str | None = None
+    technologies: list[str] | None = None
+    candidate_instructions: str | None = None
     checker_weights: dict[str, float] | None = None
+    status: Literal["draft", "published"] | None = None
 
 
 class SubmissionCreate(BaseModel):
@@ -72,6 +78,7 @@ class VerdictUpdate(BaseModel):
     """
 
     verdict: Literal["approved", "rejected", "pending"]
+    comment: str | None = None
 
 
 class AIReviewOut(BaseModel):

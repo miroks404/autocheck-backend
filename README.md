@@ -51,9 +51,10 @@ Backend-модуль конкурсного задания: REST API, очере
 - `GET /api/v1/submissions/{id}`
 - `GET /api/v1/submissions/{id}/status`
 - `GET /api/v1/submissions/{id}/results`
+- `GET /api/v1/submissions/{id}/timeline`
 - `POST /api/v1/submissions/{id}/rerun`
 - `PUT /api/v1/submissions/{id}/verdict`
-- `GET /api/v1/submissions/{id}/report`
+- `GET /api/v1/submissions/{id}/report?format=html` (или JSON по умолчанию)
 - `GET /api/v1/submissions/{id}/events` (SSE)
 - `GET /api/v1/submissions/{id}/ai-review`
 

@@ -27,4 +27,5 @@ class ReportUseCases:
             "avgScore": raw.get("avg_score", 0),
             "passRatePct": raw.get("pass_rate_pct", 0),
             "topCandidates": top_candidates,
+            "checksByDay": raw.get("checks_by_day", []),
         }

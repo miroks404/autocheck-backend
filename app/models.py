@@ -44,6 +44,17 @@ class VerdictStatus(str, Enum):
     pending = "pending"
 
 
+class AssignmentStatus(str, Enum):
+    """AssignmentStatus — publication lifecycle for test assignments.
+
+    Date: 31-05-2026
+    Author: Team 4
+    """
+
+    draft = "draft"
+    published = "published"
+
+
 class User(Base):
     """User — persistence model for platform users.
 
@@ -73,7 +84,10 @@ class Assignment(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String(255), index=True)
     description: Mapped[str] = mapped_column(Text)
+    technologies: Mapped[list] = mapped_column(JSON, default=list)
+    candidate_instructions: Mapped[str] = mapped_column(Text, default="")
     checker_weights: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[AssignmentStatus] = mapped_column(SqlEnum(AssignmentStatus), default=AssignmentStatus.published)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -95,6 +109,7 @@ class Submission(Base):
     status: Mapped[SubmissionStatus] = mapped_column(SqlEnum(SubmissionStatus), default=SubmissionStatus.pending)
     final_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     verdict: Mapped[VerdictStatus] = mapped_column(SqlEnum(VerdictStatus), default=VerdictStatus.pending)
+    verdict_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_review: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

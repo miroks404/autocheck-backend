@@ -27,6 +27,7 @@ def get_current_user(
 
 
 def require_expert(user: User = Depends(get_current_user)) -> User:
-    if user.role not in {"expert", "admin"}:
+    role = getattr(user.role, "value", user.role)
+    if role not in {"expert", "admin"}:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     return user

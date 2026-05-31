@@ -18,6 +18,16 @@ class FakeSubmissionRepo:
     def list_for_user(self, user):
         return [self.submission]
 
+    def list_enriched_for_user(self, user):
+        return [
+            {
+                "submission": self.submission,
+                "candidateFullName": "Test Candidate",
+                "candidateEmail": "candidate@example.com",
+                "assignmentTitle": "Test Assignment",
+            }
+        ]
+
     def get(self, submission_id: int):
         if submission_id == self.submission.id:
             return self.submission
@@ -45,6 +55,7 @@ def _submission(candidate_id: int = 100):
         status=SubmissionStatus.pending,
         final_score=None,
         verdict=VerdictStatus.pending,
+        verdict_comment=None,
         ai_review=None,
         created_at=now,
         updated_at=now,

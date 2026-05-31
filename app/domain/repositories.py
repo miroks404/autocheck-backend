@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Protocol
 
 from app.models import Assignment, CheckResult, Submission, User
@@ -27,13 +29,31 @@ class AssignmentRepositoryPort(Protocol):
     def list(self) -> list[Assignment]:
         ...
 
-    def create(self, title: str, description: str, checker_weights: dict[str, float], created_by: int) -> Assignment:
+    def create(
+        self,
+        title: str,
+        description: str,
+        checker_weights: dict[str, float],
+        created_by: int,
+        technologies: list[str] | None = None,
+        candidate_instructions: str = "",
+        status: str = "published",
+    ) -> Assignment:
         ...
 
     def get(self, assignment_id: int) -> Assignment | None:
         ...
 
-    def update(self, assignment: Assignment, title: str | None, description: str | None, checker_weights: dict | None) -> Assignment:
+    def update(
+        self,
+        assignment: Assignment,
+        title: str | None,
+        description: str | None,
+        checker_weights: dict | None,
+        technologies: list[str] | None = None,
+        candidate_instructions: str | None = None,
+        status: str | None = None,
+    ) -> Assignment:
         ...
 
     def delete(self, assignment: Assignment) -> None:
@@ -51,6 +71,9 @@ class SubmissionRepositoryPort(Protocol):
         ...
 
     def list_for_user(self, user: User) -> list[Submission]:
+        ...
+
+    def list_enriched_for_user(self, user: User) -> list[dict]:
         ...
 
     def get(self, submission_id: int) -> Submission | None:
@@ -80,6 +103,9 @@ class CandidateRepositoryPort(Protocol):
         ...
 
     def count_submissions(self, candidate_id: int) -> int:
+        ...
+
+    def resolve_candidate(self, full_name: str, email: str) -> User:
         ...
 
 
